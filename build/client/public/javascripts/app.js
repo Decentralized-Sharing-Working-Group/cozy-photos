@@ -1,59 +1,42 @@
-(function() {
+(function(/*! Brunch !*/) {
   'use strict';
 
-  var globals = typeof window === 'undefined' ? global : window;
+  var globals = typeof window !== 'undefined' ? window : global;
   if (typeof globals.require === 'function') return;
 
   var modules = {};
   var cache = {};
-  var has = ({}).hasOwnProperty;
 
-  var aliases = {};
-
-  var endsWith = function(str, suffix) {
-    return str.indexOf(suffix, str.length - suffix.length) !== -1;
+  var has = function(object, name) {
+    return ({}).hasOwnProperty.call(object, name);
   };
 
-  var unalias = function(alias, loaderPath) {
-    var start = 0;
-    if (loaderPath) {
-      if (loaderPath.indexOf('components/' === 0)) {
-        start = 'components/'.length;
-      }
-      if (loaderPath.indexOf('/', start) > 0) {
-        loaderPath = loaderPath.substring(start, loaderPath.indexOf('/', start));
+  var expand = function(root, name) {
+    var results = [], parts, part;
+    if (/^\.\.?(\/|$)/.test(name)) {
+      parts = [root, name].join('/').split('/');
+    } else {
+      parts = name.split('/');
+    }
+    for (var i = 0, length = parts.length; i < length; i++) {
+      part = parts[i];
+      if (part === '..') {
+        results.pop();
+      } else if (part !== '.' && part !== '') {
+        results.push(part);
       }
     }
-    var result = aliases[alias + '/index.js'] || aliases[loaderPath + '/deps/' + alias + '/index.js'];
-    if (result) {
-      return 'components/' + result.substring(0, result.length - '.js'.length);
-    }
-    return alias;
+    return results.join('/');
   };
 
-  var expand = (function() {
-    var reg = /^\.\.?(\/|$)/;
-    return function(root, name) {
-      var results = [], parts, part;
-      parts = (reg.test(name) ? root + '/' + name : name).split('/');
-      for (var i = 0, length = parts.length; i < length; i++) {
-        part = parts[i];
-        if (part === '..') {
-          results.pop();
-        } else if (part !== '.' && part !== '') {
-          results.push(part);
-        }
-      }
-      return results.join('/');
-    };
-  })();
   var dirname = function(path) {
     return path.split('/').slice(0, -1).join('/');
   };
 
   var localRequire = function(path) {
     return function(name) {
-      var absolute = expand(dirname(path), name);
+      var dir = dirname(path);
+      var absolute = expand(dir, name);
       return globals.require(absolute, path);
     };
   };
@@ -68,26 +51,21 @@
   var require = function(name, loaderPath) {
     var path = expand(name, '.');
     if (loaderPath == null) loaderPath = '/';
-    path = unalias(name, loaderPath);
 
-    if (has.call(cache, path)) return cache[path].exports;
-    if (has.call(modules, path)) return initModule(path, modules[path]);
+    if (has(cache, path)) return cache[path].exports;
+    if (has(modules, path)) return initModule(path, modules[path]);
 
     var dirIndex = expand(path, './index');
-    if (has.call(cache, dirIndex)) return cache[dirIndex].exports;
-    if (has.call(modules, dirIndex)) return initModule(dirIndex, modules[dirIndex]);
+    if (has(cache, dirIndex)) return cache[dirIndex].exports;
+    if (has(modules, dirIndex)) return initModule(dirIndex, modules[dirIndex]);
 
     throw new Error('Cannot find module "' + name + '" from '+ '"' + loaderPath + '"');
   };
 
-  require.alias = function(from, to) {
-    aliases[to] = from;
-  };
-
-  require.register = require.define = function(bundle, fn) {
+  var define = function(bundle, fn) {
     if (typeof bundle === 'object') {
       for (var key in bundle) {
-        if (has.call(bundle, key)) {
+        if (has(bundle, key)) {
           modules[key] = bundle[key];
         }
       }
@@ -96,18 +74,21 @@
     }
   };
 
-  require.list = function() {
+  var list = function() {
     var result = [];
     for (var item in modules) {
-      if (has.call(modules, item)) {
+      if (has(modules, item)) {
         result.push(item);
       }
     }
     return result;
   };
 
-  require.brunch = true;
   globals.require = require;
+  globals.require.define = define;
+  globals.require.register = define;
+  globals.require.list = list;
+  globals.require.brunch = true;
 })();
 require.register("application", function(exports, require, module) {
 var SocketListener;
@@ -1638,7 +1619,8 @@ module.exports = Router = (function(_super) {
     'albums/:albumid': 'album',
     'albums/:albumid/edit': 'albumedit',
     'albums/:albumid/photo/:photoid': 'photo',
-    'albums/:albumid/edit/photo/:photoid': 'photoedit'
+    'albums/:albumid/edit/photo/:photoid': 'photoedit',
+    'albums/:albumid/clearance': 'clearance'
   };
 
   Router.prototype.albumslist = function(editable) {
@@ -1783,12 +1765,207 @@ module.exports = Router = (function(_super) {
     return confirm;
   };
 
+  Router.prototype.clearance = function() {
+    console.log('change cleance');
+    return this.mainView.changeClearance;
+  };
+
   return Router;
 
 })(Backbone.Router);
 });
 
-;require.register("templates/album", function(exports, require, module) {
+;require.register("router", function(exports, require, module) {
+// Generated by CoffeeScript 1.8.0
+var Album, AlbumView, AlbumsListView, Router, app,
+  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
+  __hasProp = {}.hasOwnProperty,
+  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+
+app = require('application');
+
+AlbumsListView = require('views/albumslist');
+
+AlbumView = require('views/album');
+
+Album = require('models/album');
+
+module.exports = Router = (function(_super) {
+  __extends(Router, _super);
+
+  function Router() {
+    this.beforeUnload = __bind(this.beforeUnload, this);
+    this.hashChange = __bind(this.hashChange, this);
+    this.displayView = __bind(this.displayView, this);
+    return Router.__super__.constructor.apply(this, arguments);
+  }
+
+  Router.prototype.routes = {
+    '': 'albumslist',
+    'albums': 'albumslist',
+    'albums/edit': 'albumslistedit',
+    'albums/new': 'newalbum',
+    'albums/:albumid': 'album',
+    'albums/:albumid/edit': 'albumedit',
+    'albums/:albumid/photo/:photoid': 'photo',
+    'albums/:albumid/edit/photo/:photoid': 'photoedit',
+    'albums/:albumid/clearance': 'clearance'
+  };
+
+  Router.prototype.albumslist = function(editable) {
+    if (editable == null) {
+      editable = false;
+    }
+    return this.displayView(new AlbumsListView({
+      collection: app.albums.sort(),
+      editable: editable
+    }));
+  };
+
+  Router.prototype.albumslistedit = function() {
+    if (app.mode === 'public') {
+      return this.navigate('albums', true);
+    }
+    return this.albumslist(true);
+  };
+
+  Router.prototype.album = function(id, editable, callback) {
+    var album, _ref, _ref1;
+    if (editable == null) {
+      editable = false;
+    }
+    if (((_ref = this.mainView) != null ? (_ref1 = _ref.model) != null ? _ref1.get('id') : void 0 : void 0) === id) {
+      if (editable) {
+        this.mainView.makeEditable();
+      } else {
+        this.mainView.makeNonEditable();
+      }
+      if (callback) {
+        return callback();
+      } else {
+        return this.mainView.closeGallery();
+      }
+    } else {
+      album = app.albums.get(id) || new Album({
+        id: id
+      });
+      return album.fetch().done((function(_this) {
+        return function() {
+          _this.displayView(new AlbumView({
+            model: album,
+            editable: editable
+          }));
+          if (callback) {
+            return callback();
+          } else {
+            return _this.mainView.closeGallery();
+          }
+        };
+      })(this)).fail((function(_this) {
+        return function() {
+          alert(t('this album does not exist'));
+          return _this.navigate('albums', true);
+        };
+      })(this));
+    }
+  };
+
+  Router.prototype.photo = function(albumid, photoid) {
+    return this.album(albumid, false, (function(_this) {
+      return function() {
+        return _this.mainView.showPhoto(photoid);
+      };
+    })(this));
+  };
+
+  Router.prototype.photoedit = function(albumid, photoid) {
+    return this.album(albumid, true, (function(_this) {
+      return function() {
+        return _this.mainView.showPhoto(photoid);
+      };
+    })(this));
+  };
+
+  Router.prototype.albumedit = function(id) {
+    if (app.mode === 'public') {
+      return this.navigate('albums', true);
+    }
+    this.album(id, true);
+    return setTimeout(function() {
+      return $('#title').focus();
+    }, 200);
+  };
+
+  Router.prototype.newalbum = function() {
+    if (app.mode === 'public') {
+      return this.navigate('albums', true);
+    }
+    return window.app.albums.create({}, {
+      success: (function(_this) {
+        return function(model) {
+          return _this.navigate("albums/" + model.id + "/edit", true);
+        };
+      })(this),
+      error: (function(_this) {
+        return function() {
+          return _this.navigate("albums", true);
+        };
+      })(this)
+    });
+  };
+
+  Router.prototype.displayView = function(view) {
+    var el;
+    if (this.mainView) {
+      this.mainView.remove();
+    }
+    this.mainView = view;
+    el = this.mainView.render().$el;
+    el.addClass("mode-" + app.mode);
+    return $('body').append(el);
+  };
+
+  Router.prototype.hashChange = function(event) {
+    if (this.cancelNavigate) {
+      event.stopImmediatePropagation();
+      return this.cancelNavigate = false;
+    } else {
+      document.title = t('application title');
+      if (this.mainView && this.mainView.dirty) {
+        if (!(window.confirm(t("Navigate before upload")))) {
+          event.stopImmediatePropagation();
+          this.cancelNavigate = true;
+          return window.location.href = event.originalEvent.oldURL;
+        } else {
+          return this.mainView.dirty = false;
+        }
+      }
+    }
+  };
+
+  Router.prototype.beforeUnload = function(event) {
+    var confirm;
+    if (this.mainView && this.mainView.dirty) {
+      confirm = t("Navigate before upload");
+    } else {
+      confirm = void 0;
+    }
+    event.returnValue = confirm;
+    return confirm;
+  };
+
+  Router.prototype.clearance = function() {
+    console.log('change cleance');
+    return this.mainView.changeClearance;
+  };
+
+  return Router;
+
+})(Backbone.Router);
+
+});
+
+require.register("templates/album", function(exports, require, module) {
 var __templateData = function template(locals) {
 var buf = [];
 var jade_mixins = {};
@@ -2214,6 +2391,8 @@ module.exports = AlbumView = (function(_super) {
       this.model.set('clearance', []);
     }
     this.model.set('type', 'album');
+    this.model.set('key', this.model.get('id'));
+    console.log(this.model.get('key'));
     return new ShareModal({
       model: this.model
     });
@@ -2267,7 +2446,254 @@ module.exports = AlbumView = (function(_super) {
 })(BaseView);
 });
 
-;require.register("views/albumslist", function(exports, require, module) {
+;require.register("views/album", function(exports, require, module) {
+// Generated by CoffeeScript 1.8.0
+var AlbumView, BaseView, Clipboard, CozyClearanceModal, Galery, ShareModal, TAB_KEY_CODE, app, clipboard, thProcessor,
+  __hasProp = {}.hasOwnProperty,
+  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+
+app = require('application');
+
+BaseView = require('lib/base_view');
+
+Galery = require('views/galery');
+
+Clipboard = require('lib/clipboard');
+
+thProcessor = require('models/thumbprocessor');
+
+CozyClearanceModal = require('cozy-clearance/modal_share_view');
+
+clipboard = new Clipboard();
+
+TAB_KEY_CODE = 9;
+
+ShareModal = (function(_super) {
+  __extends(ShareModal, _super);
+
+  function ShareModal() {
+    return ShareModal.__super__.constructor.apply(this, arguments);
+  }
+
+  ShareModal.prototype.initialize = function() {
+    ShareModal.__super__.initialize.apply(this, arguments);
+    return this.refresh();
+  };
+
+  ShareModal.prototype.makeURL = function(key) {
+    return this.model.getPublicURL(key);
+  };
+
+  return ShareModal;
+
+})(CozyClearanceModal);
+
+module.exports = AlbumView = (function(_super) {
+  __extends(AlbumView, _super);
+
+  function AlbumView() {
+    this.onPhotoCollectionChange = __bind(this.onPhotoCollectionChange, this);
+    this.changeClearance = __bind(this.changeClearance, this);
+    this.checkNew = __bind(this.checkNew, this);
+    this.onFieldClicked = __bind(this.onFieldClicked, this);
+    this.makeNonEditable = __bind(this.makeNonEditable, this);
+    this.makeEditable = __bind(this.makeEditable, this);
+    this.onDescriptionChanged = __bind(this.onDescriptionChanged, this);
+    this.onTitleChanged = __bind(this.onTitleChanged, this);
+    this.beforePhotoUpload = __bind(this.beforePhotoUpload, this);
+    this.events = __bind(this.events, this);
+    return AlbumView.__super__.constructor.apply(this, arguments);
+  }
+
+  AlbumView.prototype.template = require('templates/album');
+
+  AlbumView.prototype.id = 'album';
+
+  AlbumView.prototype.className = 'container-fluid';
+
+  AlbumView.prototype.events = function() {
+    return {
+      'click a.delete': this.destroyModel,
+      'click a.clearance': this.changeClearance,
+      'click a.sendmail': this.sendMail,
+      'click a#rebuild-th-btn': this.rebuildThumbs,
+      'click a.stopediting': this.checkNew,
+      'blur #title': this.onTitleChanged,
+      'blur #description': this.onDescriptionChanged,
+      'click #title': this.onFieldClicked,
+      'click #description': this.onFieldClicked,
+      'mousedown #title': this.onFieldClicked,
+      'mousedown #description': this.onFieldClicked,
+      'mouseup #title': this.onFieldClicked,
+      'mouseup #description': this.onFieldClicked,
+      'keydown #description': this.onDescriptionKeyUp
+    };
+  };
+
+  AlbumView.prototype.initialize = function(options) {
+    var onPhotoCollectionChange;
+    AlbumView.__super__.initialize.call(this, options);
+    onPhotoCollectionChange = _.debounce(this.onPhotoCollectionChange, 50);
+    this.listenTo(this.model.photos, 'add remove', onPhotoCollectionChange);
+    return this.listenTo(this.model, 'change:clearance', this.render);
+  };
+
+  AlbumView.prototype.getRenderData = function() {
+    var downloadPath, key, res;
+    key = $.url().param('key');
+    downloadPath = "albums/" + (this.model.get('id')) + ".zip";
+    if (key != null) {
+      downloadPath += "?key=" + key;
+    }
+    res = _.extend({
+      downloadPath: downloadPath,
+      photosNumber: this.model.photos.length
+    }, this.model.attributes);
+    return res;
+  };
+
+  AlbumView.prototype.afterRender = function() {
+    document.title = "" + (t('application title')) + " - " + (this.model.get('title'));
+    this.title = this.$('#title');
+    this.description = this.$('#description');
+    this.galery = new Galery({
+      el: this.$('#photos'),
+      editable: this.options.editable,
+      collection: this.model.photos,
+      beforeUpload: this.beforePhotoUpload
+    });
+    this.galery.album = this.model;
+    this.galery.render();
+    if (this.options.editable) {
+      return this.makeEditable();
+    } else {
+      this.title.addClass('disabled');
+      return this.description.addClass('disabled');
+    }
+  };
+
+  AlbumView.prototype.beforePhotoUpload = function(callback) {
+    return callback({
+      albumid: this.model.id
+    });
+  };
+
+  AlbumView.prototype.onTitleChanged = function() {
+    return this.saveModel({
+      title: this.title.val().trim()
+    });
+  };
+
+  AlbumView.prototype.onDescriptionChanged = function() {
+    return this.saveModel({
+      description: this.description.val().trim()
+    });
+  };
+
+  AlbumView.prototype.makeEditable = function() {
+    document.title = "" + (t('application title')) + " - " + (this.model.get('title'));
+    this.$el.addClass('editing');
+    this.options.editable = true;
+    return this.galery.options.editable = true;
+  };
+
+  AlbumView.prototype.makeNonEditable = function() {
+    document.title = "" + (t('application title')) + " - " + (this.model.get('title'));
+    this.$el.removeClass('editing');
+    this.options.editable = false;
+    return this.galery.options.editable = false;
+  };
+
+  AlbumView.prototype.onFieldClicked = function(event) {
+    if (!this.options.editable) {
+      event.preventDefault();
+      return false;
+    }
+  };
+
+  AlbumView.prototype.destroyModel = function() {
+    if (confirm(t("are you sure you want to delete this album"))) {
+      return this.model.destroy().then(function() {
+        return app.router.navigate('albums', true);
+      });
+    }
+  };
+
+  AlbumView.prototype.checkNew = function(event) {
+    if (this.model.get('title') === '' && this.model.get('description') === '' && this.model.photos.length === 0) {
+      if (confirm(t('delete empty album'))) {
+        event.preventDefault();
+        this.model.destroy().then(function() {
+          return app.router.navigate('albums', true);
+        });
+      }
+    }
+    return true;
+  };
+
+  AlbumView.prototype.changeClearance = function(event) {
+    if (this.model.get('clearance') == null) {
+      this.model.set('clearance', []);
+    }
+    this.model.set('type', 'album');
+    this.model.set('key', this.model.get('id'));
+    console.log(this.model.get('key'));
+    return new ShareModal({
+      model: this.model
+    });
+  };
+
+  AlbumView.prototype.rebuildThumbs = function(event) {
+    var models, recFunc;
+    $("#rebuild-th p").remove();
+    models = this.model.photos.models;
+    recFunc = function() {
+      var model;
+      if (models.length > -1) {
+        model = models.pop();
+        return setTimeout(function() {
+          thProcessor.process(model);
+          return recFunc();
+        }, 500);
+      }
+    };
+    return recFunc();
+  };
+
+  AlbumView.prototype.onDescriptionKeyUp = function(event) {
+    if (TAB_KEY_CODE === event.keyCode || TAB_KEY_CODE === event.which) {
+      return $('.stopediting').focus();
+    }
+  };
+
+  AlbumView.prototype.saveModel = function(data) {
+    data.updated = Date.now();
+    return this.model.save(data);
+  };
+
+  AlbumView.prototype.onPhotoCollectionChange = function() {
+    this.model.save({
+      updated: Date.now()
+    });
+    return this.$('.photo-number').html(this.model.photos.length);
+  };
+
+  AlbumView.prototype.showPhoto = function(photoid) {
+    return this.galery.showPhoto(photoid);
+  };
+
+  AlbumView.prototype.closeGallery = function() {
+    return this.galery.closePhotobox();
+  };
+
+  return AlbumView;
+
+})(BaseView);
+
+});
+
+require.register("views/albumslist", function(exports, require, module) {
 var AlbumsList, ViewCollection, app,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,

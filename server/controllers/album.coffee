@@ -33,6 +33,10 @@ module.exports.index = (req, res, next) ->
                     window.locale = "#{locale}";
                     window.initalbums = #{JSON.stringify(visible)};
                 """
+    
+        console.log 'code index : ' + req.query.code
+        if req.query.code
+            sharing.clearanceCtl.callback req.query.code        
 
 
 # Retrieve given album data.

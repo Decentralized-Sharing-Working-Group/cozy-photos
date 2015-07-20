@@ -13,6 +13,7 @@ module.exports = class Router extends Backbone.Router
         'albums/:albumid/edit': 'albumedit'
         'albums/:albumid/photo/:photoid': 'photo'
         'albums/:albumid/edit/photo/:photoid': 'photoedit'
+        'albums/:albumid/clearance': 'clearance' #add for indieauth
 
     # display the "home" page : list of albums
     albumslist: (editable=false)->
@@ -121,3 +122,7 @@ module.exports = class Router extends Backbone.Router
             confirm = undefined
         event.returnValue = confirm
         return confirm
+
+    clearance: () ->
+        console.log 'change cleance'
+        @mainView.changeClearance

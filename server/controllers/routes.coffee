@@ -74,3 +74,12 @@ module.exports =
         put: sharing.change
     'clearance/:shareid/send':
         post: sharing.sendAll
+    'clearance/indieauth':
+        get: sharing.indieAuth
+    'clearance/indieauth/callback':
+        get: sharing.callback
+    'clearance/photos':
+        get: sharing.micropub
+    'test':
+        get: sharing.getPhoto
+

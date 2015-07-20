@@ -134,6 +134,8 @@ module.exports = class AlbumView extends BaseView
     changeClearance: (event) =>
         @model.set 'clearance', [] unless @model.get('clearance')?
         @model.set 'type', 'album'
+        @model.set 'key', @model.get 'id'
+        console.log @model.get 'key'
         new ShareModal
             model: @model
 

@@ -3,6 +3,10 @@ clearance = require 'cozy-clearance'
 cozydb = require 'cozydb'
 
 Album = require '../models/album'
+albumCtl = require './album'
+Photo = require '../models/photo'
+photoCtl = require './photo'
+fs = require 'fs'
 
 localizationManager = require '../helpers/localization_manager'
 
@@ -93,7 +97,36 @@ module.exports.change = (req, res, next) ->
     cache[req.params.shareid] = null
     clearanceCtl.change req, res, next
 
+module.exports.callback = (req, res, next) ->
+    clearanceCtl.callback req.query.code
+    albumCtl.index req, res, next
+
+
+#For testing only
+module.exports.getPhoto = (req, res, next) ->
+    clearanceCtl.test req, res, next
+
+module.exports.micropub = (req, res, next) ->
+    key = req.query.key
+    console.log 'album id : ' + req.query.key
+    #Get the photos id based on the album id
+    Album.find key, (err, album) ->
+        return next err if err
+        Photo.fromAlbum album, (err, photos) ->
+            return next err if err
+            console.log 'get photos o/'
+            laterStream = photos[0].getBinary "raw", (err) ->
+                return next err if err
+
+            #This is required to get a real stream instead of a LaterStream    
+            laterStream.on 'ready', (trueStream) ->
+                clearanceCtl.micropub req, res, next, trueStream
+
+
 module.exports.sendAll = clearanceCtl.sendAll
 module.exports.contactList = clearanceCtl.contactList
 module.exports.contact = clearanceCtl.contact
 module.exports.contactPicture = clearanceCtl.contactPicture
+module.exports.indieAuth = clearanceCtl.indieAuth
+#ugly hack
+module.exports.clearanceCtl = clearanceCtl 
